@@ -23,3 +23,6 @@ export const connectDB = async () => {
   console.log("MongoDB connected successfully");
   return db;
 };
+
+console.log("Connected to Mongo URI:", process.env.MONGO_URI);
+
