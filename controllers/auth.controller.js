@@ -30,9 +30,18 @@ export const loginAdmin = async (email, password) => {
   // 5. Generate JWT
   const token = generateToken({
     adminId: admin._id.toString(),
-    accessLevel: "FULL"
+    accessLevel: "FULL",
+    sessionVersion: newSessionVersion
   });
 
-  // 6. Return token to route layer
+// 6 Increment session version (invalidate old sessions)
+const newSessionVersion = (admin.sessionVersion || 1) + 1;
+
+await adminUsers.updateOne(
+  { _id: admin._id },
+  { $set: { sessionVersion: newSessionVersion } }
+);
+
+  // 7. Return token to route layer
   return token;
 };

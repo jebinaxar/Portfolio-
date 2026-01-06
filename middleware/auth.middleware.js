@@ -19,6 +19,13 @@ export const authenticateAdmin = (req, res, next) => {
       accessLevel: decoded.accessLevel
     };
 
+    if (decoded.sessionVersion !== admin.sessionVersion) {
+  return res.status(401).json({
+    message: "Session expired. Please log in again."
+  });
+}
+
+
     next();
   } catch (error) {
     return res.status(401).json({ message: "Unauthorized" });
