@@ -2,9 +2,10 @@ import express from "express";
 import {
   createProject,
   updateProject,
+  submitForReview,
   publishProject,
-  getPublishedProjects,
-  approveProjectByClient
+  archiveProject,
+  getPublishedProjects
 } from "../controllers/project.controller.js";
 import { authenticateAdmin } from "../middleware/auth.middleware.js";
 
@@ -12,18 +13,19 @@ const router = express.Router();
 
 /**
  * PUBLIC ROUTES
- * Anyone can view published projects
+ * Only published projects are visible
  */
-router.get("/", getPublishedProjects);
+router.get("/public", getPublishedProjects);
 
 /**
  * ADMIN ROUTES
- * Protected by authentication middleware
+ * All protected
  */
 router.post("/", authenticateAdmin, createProject);
 router.put("/:id", authenticateAdmin, updateProject);
-router.post("/:id/publish", authenticateAdmin, publishProject);
-router.post("/:id/approve", authenticateAdmin, approveProjectByClient);
 
+router.post("/:id/review", authenticateAdmin, submitForReview);
+router.post("/:id/publish", authenticateAdmin, publishProject);
+router.post("/:id/archive", authenticateAdmin, archiveProject);
 
 export default router;
