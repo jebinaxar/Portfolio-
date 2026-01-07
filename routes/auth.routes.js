@@ -18,7 +18,6 @@ router.post("/login", async (req, res) => {
     res.cookie("access_token", token, {
       httpOnly: true,
       secure: true,
-      sameSite: "strict",
       maxAge: 15 * 60 * 1000, // 15 minutes
     });
 
