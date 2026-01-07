@@ -1,6 +1,6 @@
 import express from "express";
 import { loginAdmin } from "../controllers/auth.controller.js";
-import {authenticateAdmin} from "../middleware/auth.middleware.js";
+import { authenticateAdmin } from "../middleware/auth.middleware.js";
 
 const router = express.Router();
 
@@ -17,17 +17,17 @@ router.post("/login", async (req, res) => {
     // Set secure, short-lived cookie
     res.cookie("access_token", token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
+      secure: true,
       sameSite: "strict",
-      maxAge: 15 * 60 * 1000 // 15 minutes
+      maxAge: 15 * 60 * 1000, // 15 minutes
     });
 
     return res.status(200).json({
-      message: "Login successful"
+      message: "Login successful",
     });
   } catch (error) {
     return res.status(401).json({
-      message: error.message
+      message: error.message,
     });
   }
 });
@@ -35,7 +35,7 @@ router.post("/login", async (req, res) => {
 router.get("/me", authenticateAdmin, (req, res) => {
   return res.status(200).json({
     message: "Authenticated",
-    admin: req.admin
+    admin: req.admin,
   });
 });
 
