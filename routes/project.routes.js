@@ -5,6 +5,8 @@ import {
   publishProject,
   getPublishedProjects,
   approveProjectByClient,
+  submitForReview,
+  archiveProject,
   getAllProjectsAdmin,
   getDraftProjectsAdmin
 } from "../controllers/project.controller.js";
