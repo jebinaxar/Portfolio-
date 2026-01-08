@@ -4,7 +4,6 @@ import {
   updateProject,
   publishProject,
   getPublishedProjects,
-  approveProjectByClient,
   submitForReview,
   archiveProject,
   getAllProjectsAdmin,
