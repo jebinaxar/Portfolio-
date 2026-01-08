@@ -219,6 +219,40 @@ export const getPublishedProjects = async (req, res) => {
 
 
 /**
+ * Admin: Mark project as client-approved
+ */
+export const approveProjectByClient = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const projects = await getProjectsCollection();
+
+    const result = await projects.updateOne(
+      { _id: new ObjectId(id) },
+      {
+        $set: {
+          clientApproved: true,
+          updatedAt: new Date()
+        }
+      }
+    );
+
+    if (result.matchedCount === 0) {
+      return res.status(404).json({ message: "Project not found" });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Project approved by client"
+    });
+  } catch (error) {
+    console.error("Approve project error:", error);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+
+
+/**
  * Admin: Get all projects (draft + published)
  */
 export const getAllProjectsAdmin = async (req, res) => {
