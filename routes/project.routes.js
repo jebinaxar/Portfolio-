@@ -2,14 +2,26 @@ import express from "express";
 import {
   createProject,
   updateProject,
-  submitForReview,
   publishProject,
-  archiveProject,
-  getPublishedProjects
+  getPublishedProjects,
+  approveProjectByClient,
+  getAllProjectsAdmin,
+  getDraftProjectsAdmin
 } from "../controllers/project.controller.js";
 import { authenticateAdmin } from "../middleware/auth.middleware.js";
 
 const router = express.Router();
+
+
+
+/**
+ * ADMIN VIEWS
+ */
+router.get("/admin/all", authenticateAdmin, getAllProjectsAdmin);
+router.get("/admin/drafts", authenticateAdmin, getDraftProjectsAdmin);
+
+
+
 
 /**
  * PUBLIC ROUTES

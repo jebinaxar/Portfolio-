@@ -216,3 +216,48 @@ export const getPublishedProjects = async (req, res) => {
     return res.status(500).json({ message: "Internal server error" });
   }
 };
+
+
+/**
+ * Admin: Get all projects (draft + published)
+ */
+export const getAllProjectsAdmin = async (req, res) => {
+  try {
+    const projects = await getProjectsCollection();
+
+    const allProjects = await projects
+      .find({})
+      .sort({ createdAt: -1 })
+      .toArray();
+
+    return res.status(200).json({
+      success: true,
+      data: allProjects
+    });
+  } catch (error) {
+    console.error("Admin get all projects error:", error);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+/**
+ * Admin: Get only draft projects
+ */
+export const getDraftProjectsAdmin = async (req, res) => {
+  try {
+    const projects = await getProjectsCollection();
+
+    const drafts = await projects
+      .find({ status: "draft" })
+      .sort({ createdAt: -1 })
+      .toArray();
+
+    return res.status(200).json({
+      success: true,
+      data: drafts
+    });
+  } catch (error) {
+    console.error("Admin get draft projects error:", error);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+};
