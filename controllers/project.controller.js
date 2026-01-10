@@ -63,11 +63,12 @@ export const updateProject = async (req, res) => {
       return res.status(404).json({ message: "Project not found" });
     }
 
-    if (project.status !== PROJECT_STATUS.DRAFT) {
-      return res.status(400).json({
-        message: "Only DRAFT projects can be edited"
-      });
-    }
+  if (project.status !== PROJECT_STATUS.DRAFT) {
+  return res.status(400).json({
+    message: "Only DRAFT projects can be edited"
+  });
+}
+
 
     await projects.updateOne(
       { _id: project._id },
@@ -102,11 +103,12 @@ export const submitForReview = async (req, res) => {
       return res.status(404).json({ message: "Project not found" });
     }
 
-    if (project.status !== PROJECT_STATUS.DRAFT) {
-      return res.status(400).json({
-        message: "Only DRAFT projects can be submitted for review"
-      });
-    }
+    if (project.status === PROJECT_STATUS.ARCHIVED) {
+  return res.status(400).json({
+    message: "Archived projects cannot be modified"
+  });
+}
+
 
     await projects.updateOne(
       { _id: project._id },
@@ -139,11 +141,12 @@ export const publishProject = async (req, res) => {
       return res.status(404).json({ message: "Project not found" });
     }
 
-    if (project.status !== PROJECT_STATUS.REVIEW) {
-      return res.status(400).json({
-        message: "Only REVIEW projects can be published"
-      });
-    }
+   if (project.status === PROJECT_STATUS.ARCHIVED) {
+  return res.status(400).json({
+    message: "Archived projects cannot be published"
+  });
+}
+
 
     await projects.updateOne(
       { _id: project._id },
