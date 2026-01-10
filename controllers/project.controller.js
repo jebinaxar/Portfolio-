@@ -206,17 +206,22 @@ export const getPublishedProjects = async (req, res) => {
   try {
     const projects = await getProjectsCollection();
 
-    const publishedProjects = await projects
+    const data = await projects
       .find({ status: PROJECT_STATUS.PUBLISHED })
       .sort({ createdAt: -1 })
+      .limit(12)
       .toArray();
 
-    return res.status(200).json(publishedProjects);
+    return res.status(200).json({
+      success: true,
+      data
+    });
   } catch (error) {
-    console.error("Get published projects error:", error);
+    console.error("Public projects error:", error);
     return res.status(500).json({ message: "Internal server error" });
   }
 };
+
 
 
 /**
@@ -226,20 +231,35 @@ export const getAllProjectsAdmin = async (req, res) => {
   try {
     const projects = await getProjectsCollection();
 
-    const allProjects = await projects
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = Math.min(20, parseInt(req.query.limit) || 10);
+    const skip = (page - 1) * limit;
+
+    const total = await projects.countDocuments();
+
+    const data = await projects
       .find({})
       .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
       .toArray();
 
     return res.status(200).json({
       success: true,
-      data: allProjects
+      meta: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit)
+      },
+      data
     });
   } catch (error) {
-    console.error("Admin get all projects error:", error);
+    console.error("Admin pagination error:", error);
     return res.status(500).json({ message: "Internal server error" });
   }
 };
+
 
 /**
  * Admin: Get only draft projects
