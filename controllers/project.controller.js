@@ -31,7 +31,7 @@ export const createProject = async (req, res) => {
       description,
       techStack: Array.isArray(techStack) ? techStack : [],
       status: PROJECT_STATUS.DRAFT,
-      clientApproved: false,
+      clientApproved: false, // retained but unused
       createdAt: now,
       updatedAt: now
     };
@@ -57,30 +57,27 @@ export const updateProject = async (req, res) => {
     const { title, description, techStack } = req.body;
 
     const projects = await getProjectsCollection();
-    const project = await projects.findOne({ _id: new ObjectId(id) });
 
-    if (!project) {
-      return res.status(404).json({ message: "Project not found" });
-    }
-
-  if (project.status !== PROJECT_STATUS.DRAFT) {
-  return res.status(400).json({
-    message: "Only DRAFT projects can be edited"
-  });
-}
-
-
-    await projects.updateOne(
-      { _id: project._id },
+    const result = await projects.updateOne(
+      {
+        _id: new ObjectId(id),
+        status: PROJECT_STATUS.DRAFT
+      },
       {
         $set: {
-          title: title ?? project.title,
-          description: description ?? project.description,
-          techStack: Array.isArray(techStack) ? techStack : project.techStack,
+          title,
+          description,
+          techStack: Array.isArray(techStack) ? techStack : [],
           updatedAt: new Date()
         }
       }
     );
+
+    if (result.matchedCount === 0) {
+      return res.status(400).json({
+        message: "Only DRAFT projects can be edited"
+      });
+    }
 
     return res.status(200).json({ message: "Project updated" });
   } catch (error) {
@@ -91,27 +88,18 @@ export const updateProject = async (req, res) => {
 
 /**
  * Admin: Submit a project for review (DRAFT → REVIEW)
+ * Atomic & idempotent
  */
 export const submitForReview = async (req, res) => {
   try {
     const { id } = req.params;
-
     const projects = await getProjectsCollection();
-    const project = await projects.findOne({ _id: new ObjectId(id) });
 
-    if (!project) {
-      return res.status(404).json({ message: "Project not found" });
-    }
-
-    if (project.status === PROJECT_STATUS.ARCHIVED) {
-  return res.status(400).json({
-    message: "Archived projects cannot be modified"
-  });
-}
-
-
-    await projects.updateOne(
-      { _id: project._id },
+    const result = await projects.updateOne(
+      {
+        _id: new ObjectId(id),
+        status: PROJECT_STATUS.DRAFT
+      },
       {
         $set: {
           status: PROJECT_STATUS.REVIEW,
@@ -119,6 +107,12 @@ export const submitForReview = async (req, res) => {
         }
       }
     );
+
+    if (result.matchedCount === 0) {
+      return res.status(400).json({
+        message: "Project is not in DRAFT state"
+      });
+    }
 
     return res.status(200).json({ message: "Project submitted for review" });
   } catch (error) {
@@ -129,27 +123,18 @@ export const submitForReview = async (req, res) => {
 
 /**
  * Admin: Publish a project (REVIEW → PUBLISHED)
+ * Atomic & idempotent
  */
 export const publishProject = async (req, res) => {
   try {
     const { id } = req.params;
-
     const projects = await getProjectsCollection();
-    const project = await projects.findOne({ _id: new ObjectId(id) });
 
-    if (!project) {
-      return res.status(404).json({ message: "Project not found" });
-    }
-
-   if (project.status === PROJECT_STATUS.ARCHIVED) {
-  return res.status(400).json({
-    message: "Archived projects cannot be published"
-  });
-}
-
-
-    await projects.updateOne(
-      { _id: project._id },
+    const result = await projects.updateOne(
+      {
+        _id: new ObjectId(id),
+        status: PROJECT_STATUS.REVIEW
+      },
       {
         $set: {
           status: PROJECT_STATUS.PUBLISHED,
@@ -157,6 +142,12 @@ export const publishProject = async (req, res) => {
         }
       }
     );
+
+    if (result.matchedCount === 0) {
+      return res.status(400).json({
+        message: "Project is not in REVIEW state"
+      });
+    }
 
     return res.status(200).json({ message: "Project published" });
   } catch (error) {
@@ -167,26 +158,18 @@ export const publishProject = async (req, res) => {
 
 /**
  * Admin: Archive a project (PUBLISHED → ARCHIVED)
+ * Atomic & irreversible
  */
 export const archiveProject = async (req, res) => {
   try {
     const { id } = req.params;
-
     const projects = await getProjectsCollection();
-    const project = await projects.findOne({ _id: new ObjectId(id) });
 
-    if (!project) {
-      return res.status(404).json({ message: "Project not found" });
-    }
-
-    if (project.status !== PROJECT_STATUS.PUBLISHED) {
-      return res.status(400).json({
-        message: "Only PUBLISHED projects can be archived"
-      });
-    }
-
-    await projects.updateOne(
-      { _id: project._id },
+    const result = await projects.updateOne(
+      {
+        _id: new ObjectId(id),
+        status: PROJECT_STATUS.PUBLISHED
+      },
       {
         $set: {
           status: PROJECT_STATUS.ARCHIVED,
@@ -194,6 +177,12 @@ export const archiveProject = async (req, res) => {
         }
       }
     );
+
+    if (result.matchedCount === 0) {
+      return res.status(400).json({
+        message: "Project is not in PUBLISHED state"
+      });
+    }
 
     return res.status(200).json({ message: "Project archived" });
   } catch (error) {
@@ -203,32 +192,38 @@ export const archiveProject = async (req, res) => {
 };
 
 /**
- * Public: Get all published projects
+ * Public: Get published projects (capped)
  */
 export const getPublishedProjects = async (req, res) => {
   try {
     const projects = await getProjectsCollection();
+const data = await projects
+  .find({ status: PROJECT_STATUS.PUBLISHED })
+  .sort({ createdAt: -1 })
+  .limit(12)
+  .toArray();
 
-    const data = await projects
-      .find({ status: PROJECT_STATUS.PUBLISHED })
-      .sort({ createdAt: -1 })
-      .limit(12)
-      .toArray();
+const publicProjects = data.map(p => ({
+  id: p._id.toString(),
+  title: p.title,
+  description: p.description,
+  techStack: p.techStack,
+  createdAt: p.createdAt
+}));
 
-    return res.status(200).json({
-      success: true,
-      data
-    });
+return res.status(200).json({
+  success: true,
+  data: publicProjects
+});
+
   } catch (error) {
     console.error("Public projects error:", error);
     return res.status(500).json({ message: "Internal server error" });
   }
 };
 
-
-
 /**
- * Admin: Get all projects (draft + published)
+ * Admin: Get all projects (paginated)
  */
 export const getAllProjectsAdmin = async (req, res) => {
   try {
@@ -240,12 +235,20 @@ export const getAllProjectsAdmin = async (req, res) => {
 
     const total = await projects.countDocuments();
 
-    const data = await projects
+    const rawProjects = await projects
       .find({})
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit)
       .toArray();
+
+    const data = rawProjects.map(p => ({
+      id: p._id.toString(),
+      title: p.title,
+      status: p.status,
+      createdAt: p.createdAt,
+      updatedAt: p.updatedAt
+    }));
 
     return res.status(200).json({
       success: true,
@@ -263,7 +266,6 @@ export const getAllProjectsAdmin = async (req, res) => {
   }
 };
 
-
 /**
  * Admin: Get only draft projects
  */
@@ -271,14 +273,21 @@ export const getDraftProjectsAdmin = async (req, res) => {
   try {
     const projects = await getProjectsCollection();
 
-    const drafts = await projects
-.find({ status: PROJECT_STATUS.DRAFT })
+    const rawDrafts = await projects
+      .find({ status: PROJECT_STATUS.DRAFT })
       .sort({ createdAt: -1 })
       .toArray();
 
+    const data = rawDrafts.map(p => ({
+      id: p._id.toString(),
+      title: p.title,
+      createdAt: p.createdAt,
+      updatedAt: p.updatedAt
+    }));
+
     return res.status(200).json({
       success: true,
-      data: drafts
+      data
     });
   } catch (error) {
     console.error("Admin get draft projects error:", error);
