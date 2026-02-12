@@ -1,28 +1,19 @@
 import { ObjectId } from "mongodb";
 import { getContactRequestsCollection } from "../collections/contactRequests.collection.js";
+import { validateAndNormalizeContactPayload } from "../services/contact.service.js";
 
 /**
  * Public: Submit a contact request
  */
 export const submitContactRequest = async (req, res) => {
   try {
-    const { name, email, message } = req.body;
-
-    if (!name || !email || !message) {
-      return res.status(400).json({ message: "All fields are required" });
+    const validation = validateAndNormalizeContactPayload(req.body);
+    if (!validation.ok) {
+      return res.status(validation.statusCode).json({ message: validation.message });
     }
 
     const contacts = await getContactRequestsCollection();
-
-    const newRequest = {
-      name,
-      email,
-      message,
-      status: "new", // new | reviewed | archived
-      createdAt: new Date()
-    };
-
-    await contacts.insertOne(newRequest);
+    await contacts.insertOne(validation.payload);
 
     return res.status(201).json({
       message: "Contact request submitted"
@@ -58,6 +49,9 @@ export const getAllContactRequests = async (req, res) => {
 export const markContactReviewed = async (req, res) => {
   try {
     const { id } = req.params;
+    if (!ObjectId.isValid(id)) {
+      return res.status(400).json({ message: "Invalid contact request id" });
+    }
 
     const contacts = await getContactRequestsCollection();
 

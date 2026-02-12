@@ -1,32 +1,8 @@
-import express from "express";
-import cookieParser from "cookie-parser";
 import { connectDB } from "./config/db.js";
-import authRoutes from "./routes/auth.routes.js";
-import projectRoutes from "./routes/project.routes.js";
-import contactRoutes from "./routes/contact.routes.js";
-import cors from "cors";
-
-const app = express();
-
-app.set("trust proxy", 1);
+import { createApp } from "./app.js";
 
 const PORT = process.env.PORT || 5000;
-
-// Middleware
-app.use(express.json());
-app.use(cookieParser());
-app.use(cors({
-  origin : true,
-  credentials: true
-}));
-
-// Health check
-app.get("/", (req, res) => {
-  res.send("Server is running");
-});
-
-// Auth routes
-app.use("/auth", authRoutes);
+const app = createApp();
 
 const startServer = async () => {
   try {
@@ -40,11 +16,5 @@ const startServer = async () => {
     process.exit(1);
   }
 };
-
-// Project routes
-app.use("/projects", projectRoutes);
-
-// Contact routes
-app.use("/contacts", contactRoutes);
 
 startServer();

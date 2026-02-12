@@ -1,23 +1,34 @@
 import { ObjectId } from "mongodb";
 import { getProjectsCollection } from "../collections/projects.collection.js";
+import {
+  canTransitionProjectStatus,
+  PROJECT_STATUS,
+} from "../services/projectWorkflow.service.js";
 
-/**
- * Canonical project states
- * Single source of truth
- */
-const PROJECT_STATUS = {
-  DRAFT: "DRAFT",
-  REVIEW: "REVIEW",
-  PUBLISHED: "PUBLISHED",
-  ARCHIVED: "ARCHIVED"
-};
+const mapProjectSummary = (p) => ({
+  id: p._id.toString(),
+  title: p.title,
+  status: p.status,
+  createdAt: p.createdAt,
+  updatedAt: p.updatedAt,
+});
+
+const mapPublicProject = (p) => ({
+  id: p._id.toString(),
+  title: p.title,
+  description: p.description,
+  techStack: Array.isArray(p.techStack) ? p.techStack : [],
+  imageUrl: p.imageUrl || "",
+  createdAt: p.createdAt,
+});
 
 /**
  * Admin: Create a new project (always DRAFT)
  */
 export const createProject = async (req, res) => {
   try {
-    const { title, description, techStack } = req.body;
+    const { title, description, techStack, imageUrl, problem, approach, impact, links } =
+      req.body || {};
 
     if (!title || !description) {
       return res.status(400).json({ message: "Missing required fields" });
@@ -27,20 +38,30 @@ export const createProject = async (req, res) => {
     const now = new Date();
 
     const project = {
-      title,
-      description,
+      title: String(title).trim(),
+      description: String(description).trim(),
       techStack: Array.isArray(techStack) ? techStack : [],
+      imageUrl: imageUrl || "",
+      problem: problem || "",
+      approach: approach || "",
+      impact: impact || "",
+      links:
+        typeof links === "object" && links
+          ? {
+              live: links.live || "",
+              github: links.github || "",
+            }
+          : { live: "", github: "" },
       status: PROJECT_STATUS.DRAFT,
-      clientApproved: false, // retained but unused
       createdAt: now,
-      updatedAt: now
+      updatedAt: now,
     };
 
     const result = await projects.insertOne(project);
 
     return res.status(201).json({
       message: "Project created as DRAFT",
-      projectId: result.insertedId
+      projectId: result.insertedId,
     });
   } catch (error) {
     console.error("Create project error:", error);
@@ -54,28 +75,39 @@ export const createProject = async (req, res) => {
 export const updateProject = async (req, res) => {
   try {
     const { id } = req.params;
-    const { title, description, techStack } = req.body;
+    if (!ObjectId.isValid(id)) {
+      return res.status(400).json({ message: "Invalid project id" });
+    }
 
+    const { title, description, techStack, imageUrl, problem, approach, impact, links } =
+      req.body || {};
     const projects = await getProjectsCollection();
 
     const result = await projects.updateOne(
       {
         _id: new ObjectId(id),
-        status: PROJECT_STATUS.DRAFT
+        status: PROJECT_STATUS.DRAFT,
       },
       {
         $set: {
-          title,
-          description,
-          techStack: Array.isArray(techStack) ? techStack : [],
-          updatedAt: new Date()
-        }
+          ...(title ? { title: String(title).trim() } : {}),
+          ...(description ? { description: String(description).trim() } : {}),
+          ...(Array.isArray(techStack) ? { techStack } : {}),
+          ...(typeof imageUrl === "string" ? { imageUrl } : {}),
+          ...(typeof problem === "string" ? { problem } : {}),
+          ...(typeof approach === "string" ? { approach } : {}),
+          ...(typeof impact === "string" ? { impact } : {}),
+          ...(typeof links === "object" && links
+            ? { links: { live: links.live || "", github: links.github || "" } }
+            : {}),
+          updatedAt: new Date(),
+        },
       }
     );
 
     if (result.matchedCount === 0) {
       return res.status(400).json({
-        message: "Only DRAFT projects can be edited"
+        message: "Only DRAFT projects can be edited",
       });
     }
 
@@ -86,32 +118,42 @@ export const updateProject = async (req, res) => {
   }
 };
 
-/**
- * Admin: Submit a project for review (DRAFT → REVIEW)
- * Atomic & idempotent
- */
+const transitionProjectStatus = async (id, fromStatus, toStatus) => {
+  if (!canTransitionProjectStatus(fromStatus, toStatus)) {
+    throw new Error(`Invalid status transition: ${fromStatus} -> ${toStatus}`);
+  }
+
+  const projects = await getProjectsCollection();
+
+  return projects.updateOne(
+    {
+      _id: new ObjectId(id),
+      status: fromStatus,
+    },
+    {
+      $set: {
+        status: toStatus,
+        updatedAt: new Date(),
+      },
+    }
+  );
+};
+
 export const submitForReview = async (req, res) => {
   try {
     const { id } = req.params;
-    const projects = await getProjectsCollection();
+    if (!ObjectId.isValid(id)) {
+      return res.status(400).json({ message: "Invalid project id" });
+    }
 
-    const result = await projects.updateOne(
-      {
-        _id: new ObjectId(id),
-        status: PROJECT_STATUS.DRAFT
-      },
-      {
-        $set: {
-          status: PROJECT_STATUS.REVIEW,
-          updatedAt: new Date()
-        }
-      }
+    const result = await transitionProjectStatus(
+      id,
+      PROJECT_STATUS.DRAFT,
+      PROJECT_STATUS.REVIEW
     );
 
     if (result.matchedCount === 0) {
-      return res.status(400).json({
-        message: "Project is not in DRAFT state"
-      });
+      return res.status(400).json({ message: "Project is not in DRAFT state" });
     }
 
     return res.status(200).json({ message: "Project submitted for review" });
@@ -121,32 +163,21 @@ export const submitForReview = async (req, res) => {
   }
 };
 
-/**
- * Admin: Publish a project (REVIEW → PUBLISHED)
- * Atomic & idempotent
- */
 export const publishProject = async (req, res) => {
   try {
     const { id } = req.params;
-    const projects = await getProjectsCollection();
+    if (!ObjectId.isValid(id)) {
+      return res.status(400).json({ message: "Invalid project id" });
+    }
 
-    const result = await projects.updateOne(
-      {
-        _id: new ObjectId(id),
-        status: PROJECT_STATUS.REVIEW
-      },
-      {
-        $set: {
-          status: PROJECT_STATUS.PUBLISHED,
-          updatedAt: new Date()
-        }
-      }
+    const result = await transitionProjectStatus(
+      id,
+      PROJECT_STATUS.REVIEW,
+      PROJECT_STATUS.PUBLISHED
     );
 
     if (result.matchedCount === 0) {
-      return res.status(400).json({
-        message: "Project is not in REVIEW state"
-      });
+      return res.status(400).json({ message: "Project is not in REVIEW state" });
     }
 
     return res.status(200).json({ message: "Project published" });
@@ -156,32 +187,21 @@ export const publishProject = async (req, res) => {
   }
 };
 
-/**
- * Admin: Archive a project (PUBLISHED → ARCHIVED)
- * Atomic & irreversible
- */
 export const archiveProject = async (req, res) => {
   try {
     const { id } = req.params;
-    const projects = await getProjectsCollection();
+    if (!ObjectId.isValid(id)) {
+      return res.status(400).json({ message: "Invalid project id" });
+    }
 
-    const result = await projects.updateOne(
-      {
-        _id: new ObjectId(id),
-        status: PROJECT_STATUS.PUBLISHED
-      },
-      {
-        $set: {
-          status: PROJECT_STATUS.ARCHIVED,
-          updatedAt: new Date()
-        }
-      }
+    const result = await transitionProjectStatus(
+      id,
+      PROJECT_STATUS.PUBLISHED,
+      PROJECT_STATUS.ARCHIVED
     );
 
     if (result.matchedCount === 0) {
-      return res.status(400).json({
-        message: "Project is not in PUBLISHED state"
-      });
+      return res.status(400).json({ message: "Project is not in PUBLISHED state" });
     }
 
     return res.status(200).json({ message: "Project archived" });
@@ -191,31 +211,46 @@ export const archiveProject = async (req, res) => {
   }
 };
 
+export const restoreProject = async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!ObjectId.isValid(id)) {
+      return res.status(400).json({ message: "Invalid project id" });
+    }
+
+    const result = await transitionProjectStatus(
+      id,
+      PROJECT_STATUS.ARCHIVED,
+      PROJECT_STATUS.DRAFT
+    );
+
+    if (result.matchedCount === 0) {
+      return res.status(400).json({ message: "Project is not in ARCHIVED state" });
+    }
+
+    return res.status(200).json({ message: "Project restored to DRAFT" });
+  } catch (error) {
+    console.error("Restore project error:", error);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+};
+
 /**
- * Public: Get published projects (capped)
+ * Public: list published projects
  */
 export const getPublishedProjects = async (req, res) => {
   try {
     const projects = await getProjectsCollection();
-const data = await projects
-  .find({ status: PROJECT_STATUS.PUBLISHED })
-  .sort({ createdAt: -1 })
-  .limit(12)
-  .toArray();
+    const data = await projects
+      .find({ status: PROJECT_STATUS.PUBLISHED })
+      .sort({ createdAt: -1 })
+      .limit(12)
+      .toArray();
 
-const publicProjects = data.map(p => ({
-  id: p._id.toString(),
-  title: p.title,
-  description: p.description,
-  techStack: p.techStack,
-  createdAt: p.createdAt
-}));
-
-return res.status(200).json({
-  success: true,
-  data: publicProjects
-});
-
+    return res.status(200).json({
+      success: true,
+      data: data.map(mapPublicProject),
+    });
   } catch (error) {
     console.error("Public projects error:", error);
     return res.status(500).json({ message: "Internal server error" });
@@ -223,32 +258,73 @@ return res.status(200).json({
 };
 
 /**
- * Admin: Get all projects (paginated)
+ * Public: get one published project detail
+ */
+export const getPublicProjectById = async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!ObjectId.isValid(id)) {
+      return res.status(400).json({ message: "Invalid project id" });
+    }
+
+    const projects = await getProjectsCollection();
+    const project = await projects.findOne({
+      _id: new ObjectId(id),
+      status: PROJECT_STATUS.PUBLISHED,
+    });
+
+    if (!project) {
+      return res.status(404).json({ message: "Project not found" });
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        ...mapPublicProject(project),
+        problem: project.problem || "",
+        approach: project.approach || "",
+        impact: project.impact || "",
+        links: {
+          live: project.links?.live || "",
+          github: project.links?.github || "",
+        },
+      },
+    });
+  } catch (error) {
+    console.error("Public project detail error:", error);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+/**
+ * Admin: list projects (paginated + filter)
  */
 export const getAllProjectsAdmin = async (req, res) => {
   try {
     const projects = await getProjectsCollection();
 
-    const page = Math.max(1, parseInt(req.query.page) || 1);
-    const limit = Math.min(20, parseInt(req.query.limit) || 10);
+    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const limit = Math.min(20, parseInt(req.query.limit, 10) || 10);
     const skip = (page - 1) * limit;
+    const q = String(req.query.q || "").trim();
+    const status = String(req.query.status || "ALL").trim().toUpperCase();
 
-    const total = await projects.countDocuments();
+    const query = {};
+    if (status !== "ALL") {
+      query.status = status;
+    }
+    if (q) {
+      query.title = { $regex: q, $options: "i" };
+    }
+
+    const total = await projects.countDocuments(query);
 
     const rawProjects = await projects
-      .find({})
+      .find(query)
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit)
       .toArray();
-
-    const data = rawProjects.map(p => ({
-      id: p._id.toString(),
-      title: p.title,
-      status: p.status,
-      createdAt: p.createdAt,
-      updatedAt: p.updatedAt
-    }));
 
     return res.status(200).json({
       success: true,
@@ -256,9 +332,9 @@ export const getAllProjectsAdmin = async (req, res) => {
         page,
         limit,
         total,
-        totalPages: Math.ceil(total / limit)
+        totalPages: Math.max(1, Math.ceil(total / limit)),
       },
-      data
+      data: rawProjects.map(mapProjectSummary),
     });
   } catch (error) {
     console.error("Admin pagination error:", error);
@@ -266,28 +342,17 @@ export const getAllProjectsAdmin = async (req, res) => {
   }
 };
 
-/**
- * Admin: Get only draft projects
- */
 export const getDraftProjectsAdmin = async (req, res) => {
   try {
     const projects = await getProjectsCollection();
-
     const rawDrafts = await projects
       .find({ status: PROJECT_STATUS.DRAFT })
       .sort({ createdAt: -1 })
       .toArray();
 
-    const data = rawDrafts.map(p => ({
-      id: p._id.toString(),
-      title: p.title,
-      createdAt: p.createdAt,
-      updatedAt: p.updatedAt
-    }));
-
     return res.status(200).json({
       success: true,
-      data
+      data: rawDrafts.map(mapProjectSummary),
     });
   } catch (error) {
     console.error("Admin get draft projects error:", error);

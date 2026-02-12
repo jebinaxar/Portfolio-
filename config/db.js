@@ -4,6 +4,7 @@ import { MongoClient } from "mongodb";
 dotenv.config();
 
 const uri = process.env.MONGO_URI;
+const dbName = process.env.MONGO_DB_NAME || "PortfolioCluster";
 
 if (!uri) {
   throw new Error("MONGO_URI is not defined in .env");
@@ -18,11 +19,16 @@ export const connectDB = async () => {
   client = new MongoClient(uri);
   await client.connect();
 
-  db = client.db("PortfolioCluster");
+  db = client.db(dbName);
 
-  console.log("MongoDB connected successfully");
+  console.log(`MongoDB connected successfully (${dbName})`);
   return db;
 };
 
-console.log("Connected to Mongo URI:", process.env.MONGO_URI);
-
+export const closeDB = async () => {
+  if (client) {
+    await client.close();
+    client = null;
+    db = null;
+  }
+};

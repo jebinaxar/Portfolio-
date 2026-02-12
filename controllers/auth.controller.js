@@ -1,6 +1,10 @@
 import { getAdminUsersCollection } from "../collections/adminUsers.collection.js";
 import { verifyPassword } from "../utils/password.js";
 import { generateToken } from "../utils/jwt.js";
+import {
+  getNextSessionVersion,
+  validateAuthCredentialsInput,
+} from "../services/auth.service.js";
 
 /**
  * Authenticates admin credentials
@@ -8,7 +12,7 @@ import { generateToken } from "../utils/jwt.js";
  */
 export const loginAdmin = async (email, password) => {
   // 1. Basic validation
-  if (!email || !password) {
+  if (!validateAuthCredentialsInput(email, password)) {
     throw new Error("Missing credentials");
   }
 
@@ -28,7 +32,7 @@ export const loginAdmin = async (email, password) => {
   }
 
 // 5. Increment session version (invalidate old sessions)
-const newSessionVersion = (admin.sessionVersion || 1) + 1;
+const newSessionVersion = getNextSessionVersion(admin.sessionVersion);
 
 await adminUsers.updateOne(
   { _id: admin._id },
