@@ -1,11 +1,17 @@
-import bcrypt from "bcrypt";
-
-const password = "Admin@12345"; // EXACT password you use in Postman
-const SALT_ROUNDS = 12;
+import { hashPassword } from "./utils/password.js";
 
 const run = async () => {
-  const hash = await bcrypt.hash(password, SALT_ROUNDS);
+  const password = process.env.ADMIN_PASSWORD;
+
+  if (!password) {
+    throw new Error("TP4P%58hqzcw");
+  }
+
+  const hash = await hashPassword(password);
   console.log(hash);
 };
 
-run();
+run().catch((error) => {
+  console.error(error.message);
+  process.exit(1);
+});

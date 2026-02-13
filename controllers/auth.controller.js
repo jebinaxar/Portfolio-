@@ -11,42 +11,39 @@ import {
  * Returns JWT if successful
  */
 export const loginAdmin = async (email, password) => {
-  // 1. Basic validation
   if (!validateAuthCredentialsInput(email, password)) {
     throw new Error("Missing credentials");
   }
 
-  // 2. Fetch admin user
-  const adminUsers = await getAdminUsersCollection();
-  const admin = await adminUsers.findOne({ email });
+  const normalizedEmail = String(email).trim().toLowerCase();
+  if (!normalizedEmail) {
+    throw new Error("Missing credentials");
+  }
 
-  // 3. Generic failure
+  const adminUsers = await getAdminUsersCollection();
+  const admin = await adminUsers.findOne({ email: normalizedEmail });
+
   if (!admin) {
     throw new Error("Invalid credentials");
   }
 
-  // 4. Verify password
   const isPasswordValid = await verifyPassword(password, admin.passwordHash);
   if (!isPasswordValid) {
     throw new Error("Invalid credentials");
   }
 
-// 5. Increment session version (invalidate old sessions)
-const newSessionVersion = getNextSessionVersion(admin.sessionVersion);
+  const newSessionVersion = getNextSessionVersion(admin.sessionVersion);
 
-await adminUsers.updateOne(
-  { _id: admin._id },
-  { $set: { sessionVersion: newSessionVersion } }
-);
+  await adminUsers.updateOne(
+    { _id: admin._id },
+    { $set: { sessionVersion: newSessionVersion } }
+  );
 
-// 6. Generate JWT
   const token = generateToken({
     adminId: admin._id.toString(),
     accessLevel: "FULL",
-    sessionVersion: newSessionVersion
+    sessionVersion: newSessionVersion,
   });
 
-
-  // 7. Return token to route layer
   return token;
 };
