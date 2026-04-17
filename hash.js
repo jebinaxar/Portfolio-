@@ -4,7 +4,7 @@ const run = async () => {
   const password = process.env.ADMIN_PASSWORD;
 
   if (!password) {
-    throw new Error("TP4P%58hqzcw");
+    throw new Error("ADMIN_PASSWORD is required");
   }
 
   const hash = await hashPassword(password);

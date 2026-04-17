@@ -3,6 +3,8 @@ import {
   createProject,
   updateProject,
   publishProject,
+  moveProjectToDraft,
+  moveProjectToReview,
   getPublishedProjects,
   getPublicProjectById,
   submitForReview,
@@ -41,6 +43,8 @@ router.post("/", authenticateAdmin, createProject);
 router.put("/:id", authenticateAdmin, updateProject);
 
 router.post("/:id/review", authenticateAdmin, submitForReview);
+router.post("/:id/move-to-draft", authenticateAdmin, moveProjectToDraft);
+router.post("/:id/move-to-review", authenticateAdmin, moveProjectToReview);
 router.post("/:id/publish", authenticateAdmin, publishProject);
 router.post("/:id/archive", authenticateAdmin, archiveProject);
 router.post("/:id/restore", authenticateAdmin, restoreProject);

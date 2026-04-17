@@ -39,12 +39,31 @@ MONGO_URI=your_mongodb_connection_string
 JWT_SECRET=your_jwt_secret
 CLIENT_ORIGIN=http://localhost:5173
 COOKIE_DOMAIN=
+ADMIN_EMAIL=admin@example.com
+ADMIN_PASSWORD=your_admin_password
 ```
 
 Notes:
 - `CLIENT_ORIGIN` supports comma-separated values.
 - In production, use `NODE_ENV=production`.
 - `COOKIE_DOMAIN` is optional and typically used in production.
+- `ADMIN_EMAIL` and `ADMIN_PASSWORD` are used by the local admin seeding script.
+
+## Create Or Update Admin Login
+
+Before logging in, create the admin record in MongoDB:
+
+```bash
+cd server
+npm run seed:admin
+```
+
+This upserts an `adminUsers` document with:
+- `email`
+- `passwordHash`
+- `sessionVersion`
+
+If you change `ADMIN_PASSWORD`, run `npm run seed:admin` again before trying to log in.
 
 ## Run
 

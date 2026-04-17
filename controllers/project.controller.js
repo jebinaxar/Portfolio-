@@ -5,10 +5,23 @@ import {
   PROJECT_STATUS,
 } from "../services/projectWorkflow.service.js";
 
+const normalizeProjectStatus = (status) => {
+  const normalized = String(status || "").trim().toUpperCase();
+  return Object.values(PROJECT_STATUS).includes(normalized)
+    ? normalized
+    : PROJECT_STATUS.DRAFT;
+};
+
+const buildStatusMatcher = (status) => ({
+  $regex: `^\\s*${normalizeProjectStatus(status)}\\s*$`,
+  $options: "i",
+});
+
 const mapProjectSummary = (p) => ({
   id: p._id.toString(),
   title: p.title,
-  status: p.status,
+  description: p.description || "",
+  status: normalizeProjectStatus(p.status),
   createdAt: p.createdAt,
   updatedAt: p.updatedAt,
 });
@@ -86,7 +99,7 @@ export const updateProject = async (req, res) => {
     const result = await projects.updateOne(
       {
         _id: new ObjectId(id),
-        status: PROJECT_STATUS.DRAFT,
+        status: buildStatusMatcher(PROJECT_STATUS.DRAFT),
       },
       {
         $set: {
@@ -128,7 +141,7 @@ const transitionProjectStatus = async (id, fromStatus, toStatus) => {
   return projects.updateOne(
     {
       _id: new ObjectId(id),
-      status: fromStatus,
+      status: buildStatusMatcher(fromStatus),
     },
     {
       $set: {
@@ -137,6 +150,71 @@ const transitionProjectStatus = async (id, fromStatus, toStatus) => {
       },
     }
   );
+};
+
+const setProjectStatus = async (id, toStatus) => {
+  const projects = await getProjectsCollection();
+
+  return projects.findOneAndUpdate(
+    { _id: new ObjectId(id) },
+    {
+      $set: {
+        status: toStatus,
+        updatedAt: new Date(),
+      },
+    },
+    {
+      returnDocument: "before",
+    }
+  );
+};
+
+export const moveProjectToDraft = async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!ObjectId.isValid(id)) {
+      return res.status(400).json({ message: "Invalid project id" });
+    }
+
+    const result = await setProjectStatus(id, PROJECT_STATUS.DRAFT);
+
+    if (!result) {
+      return res.status(404).json({ message: "Project not found" });
+    }
+
+    if (normalizeProjectStatus(result.status) === PROJECT_STATUS.DRAFT) {
+      return res.status(200).json({ message: "Project already in DRAFT" });
+    }
+
+    return res.status(200).json({ message: "Project moved to DRAFT" });
+  } catch (error) {
+    console.error("Move project to draft error:", error);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+export const moveProjectToReview = async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!ObjectId.isValid(id)) {
+      return res.status(400).json({ message: "Invalid project id" });
+    }
+
+    const result = await setProjectStatus(id, PROJECT_STATUS.REVIEW);
+
+    if (!result) {
+      return res.status(404).json({ message: "Project not found" });
+    }
+
+    if (normalizeProjectStatus(result.status) === PROJECT_STATUS.REVIEW) {
+      return res.status(200).json({ message: "Project already in REVIEW" });
+    }
+
+    return res.status(200).json({ message: "Project moved to REVIEW" });
+  } catch (error) {
+    console.error("Move project to review error:", error);
+    return res.status(500).json({ message: "Internal server error" });
+  }
 };
 
 export const submitForReview = async (req, res) => {
@@ -170,17 +248,33 @@ export const publishProject = async (req, res) => {
       return res.status(400).json({ message: "Invalid project id" });
     }
 
-    const result = await transitionProjectStatus(
-      id,
-      PROJECT_STATUS.REVIEW,
-      PROJECT_STATUS.PUBLISHED
-    );
+    const projects = await getProjectsCollection();
+    const existingProject = await projects.findOne({ _id: new ObjectId(id) });
 
-    if (result.matchedCount === 0) {
-      return res.status(400).json({ message: "Project is not in REVIEW state" });
+    if (!existingProject) {
+      return res.status(404).json({ message: "Project not found" });
     }
 
-    return res.status(200).json({ message: "Project published" });
+    const nextStatus =
+      normalizeProjectStatus(existingProject.status) === PROJECT_STATUS.PUBLISHED
+        ? PROJECT_STATUS.DRAFT
+        : PROJECT_STATUS.PUBLISHED;
+
+    await projects.updateOne(
+      { _id: new ObjectId(id) },
+      {
+        $set: {
+          status: nextStatus,
+          updatedAt: new Date(),
+        },
+      }
+    );
+
+    if (nextStatus === PROJECT_STATUS.PUBLISHED) {
+      return res.status(200).json({ message: "Project published" });
+    }
+
+    return res.status(200).json({ message: "Project unpublished to DRAFT" });
   } catch (error) {
     console.error("Publish project error:", error);
     return res.status(500).json({ message: "Internal server error" });
@@ -242,7 +336,7 @@ export const getPublishedProjects = async (req, res) => {
   try {
     const projects = await getProjectsCollection();
     const data = await projects
-      .find({ status: PROJECT_STATUS.PUBLISHED })
+      .find({ status: buildStatusMatcher(PROJECT_STATUS.PUBLISHED) })
       .sort({ createdAt: -1 })
       .limit(12)
       .toArray();
@@ -270,7 +364,7 @@ export const getPublicProjectById = async (req, res) => {
     const projects = await getProjectsCollection();
     const project = await projects.findOne({
       _id: new ObjectId(id),
-      status: PROJECT_STATUS.PUBLISHED,
+      status: buildStatusMatcher(PROJECT_STATUS.PUBLISHED),
     });
 
     if (!project) {
@@ -311,7 +405,7 @@ export const getAllProjectsAdmin = async (req, res) => {
 
     const query = {};
     if (status !== "ALL") {
-      query.status = status;
+      query.status = buildStatusMatcher(status);
     }
     if (q) {
       query.title = { $regex: q, $options: "i" };
@@ -346,7 +440,7 @@ export const getDraftProjectsAdmin = async (req, res) => {
   try {
     const projects = await getProjectsCollection();
     const rawDrafts = await projects
-      .find({ status: PROJECT_STATUS.DRAFT })
+      .find({ status: buildStatusMatcher(PROJECT_STATUS.DRAFT) })
       .sort({ createdAt: -1 })
       .toArray();
 

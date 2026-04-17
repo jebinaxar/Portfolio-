@@ -6,7 +6,9 @@
   "main": "server.js",
   "scripts": {
     "test": "node --test",
-    "start": "node server.js"
+    "start": "node server.js",
+    "hash:password": "node hash.js",
+    "seed:admin": "node seedAdmin.js"
   },
   "keywords": [],
   "author": "",

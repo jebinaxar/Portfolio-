@@ -5,7 +5,7 @@ import {
   PROJECT_STATUS,
 } from "../services/projectWorkflow.service.js";
 
-test("allows valid project lifecycle transitions", () => {
+test("allows moving between distinct known project statuses", () => {
   assert.equal(
     canTransitionProjectStatus(PROJECT_STATUS.DRAFT, PROJECT_STATUS.REVIEW),
     true
@@ -15,26 +15,26 @@ test("allows valid project lifecycle transitions", () => {
     true
   );
   assert.equal(
-    canTransitionProjectStatus(PROJECT_STATUS.PUBLISHED, PROJECT_STATUS.ARCHIVED),
+    canTransitionProjectStatus(PROJECT_STATUS.PUBLISHED, PROJECT_STATUS.DRAFT),
     true
   );
   assert.equal(
-    canTransitionProjectStatus(PROJECT_STATUS.ARCHIVED, PROJECT_STATUS.DRAFT),
+    canTransitionProjectStatus(PROJECT_STATUS.ARCHIVED, PROJECT_STATUS.REVIEW),
     true
   );
 });
 
-test("rejects invalid project lifecycle transitions", () => {
+test("rejects same-status and unknown-status transitions", () => {
   assert.equal(
-    canTransitionProjectStatus(PROJECT_STATUS.DRAFT, PROJECT_STATUS.PUBLISHED),
+    canTransitionProjectStatus(PROJECT_STATUS.DRAFT, PROJECT_STATUS.DRAFT),
     false
   );
   assert.equal(
-    canTransitionProjectStatus(PROJECT_STATUS.REVIEW, PROJECT_STATUS.ARCHIVED),
+    canTransitionProjectStatus(PROJECT_STATUS.REVIEW, "INVALID"),
     false
   );
   assert.equal(
-    canTransitionProjectStatus(PROJECT_STATUS.ARCHIVED, PROJECT_STATUS.PUBLISHED),
+    canTransitionProjectStatus("INVALID", PROJECT_STATUS.PUBLISHED),
     false
   );
 });
